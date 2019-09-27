@@ -11,7 +11,7 @@ import scala.collection.mutable.ArrayBuffer
 /**
   * 从MySQl中获取规则
   */
-object AnalyzeRuleFromMySQL {
+object AnalyzeRuleDB {
 
   /**
     * 获取url过滤规则
@@ -134,5 +134,8 @@ object AnalyzeRuleFromMySQL {
     val ipInitList = QueryDB.queryData(nibsql, nibField)
     ipInitList
   }
+
+
+
 
 }

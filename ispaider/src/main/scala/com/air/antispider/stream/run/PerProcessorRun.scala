@@ -7,7 +7,7 @@ import com.air.antispider.stream.preprocess.filter.URLFilter
 import com.air.antispider.stream.preprocess.link.LinkProcess
 import com.air.antispider.stream.preprocess.monitor.SparkStreamingMonitor
 import com.air.antispider.stream.preprocess.refreshBroadcast.RefreshBroadcast
-import com.air.antispider.stream.preprocess.rule.{AnalyzeBookRequest, AnalyzeRequest, AnalyzeRuleFromMySQL}
+import com.air.antispider.stream.preprocess.rule.{AnalyzeBookRequest, AnalyzeRequest, AnalyzeRuleDB}
 import com.air.antispider.stream.preprocess.senddatatokafka.DataSendToKafka
 import com.air.antispider.stream.preprocess.tags.{BlackIPTags, RequestTags}
 import kafka.serializer.StringDecoder
@@ -71,27 +71,27 @@ object PerProcessorRun {
   def processData(ssc: StreamingContext, sc: SparkContext) = {
 
     //  从MySQL中获取url过滤规则
-    val urlFilterRules: ArrayBuffer[String] = AnalyzeRuleFromMySQL.getFilterRuleList()
+    val urlFilterRules: ArrayBuffer[String] = AnalyzeRuleDB.getFilterRuleList()
     // 设置广播变量 -> volatile 注解可以安全修改广播变量
     @volatile var urlFilterRulesBroadcast: Broadcast[ArrayBuffer[String]] = sc.broadcast(urlFilterRules)
 
     // 从MySQL中获取请求规则
-    val requestRulesMap: Map[String, ArrayBuffer[String]] = AnalyzeRuleFromMySQL.getClassifyRule()
+    val requestRulesMap: Map[String, ArrayBuffer[String]] = AnalyzeRuleDB.getClassifyRule()
     // 设置广播变量
     @volatile var requestRulesBroadcast: Broadcast[Map[String, ArrayBuffer[String]]] = sc.broadcast(requestRulesMap)
 
     // 从MySQL中获取解析规则 -> 查询类数据
-    val queryRules: List[AnalyzeRule] = AnalyzeRuleFromMySQL.queryRule(0)
+    val queryRules: List[AnalyzeRule] = AnalyzeRuleDB.queryRule(0)
     // 设置广播变量
     @volatile var queryRulesBroadcast: Broadcast[List[AnalyzeRule]] = sc.broadcast(queryRules)
 
     // 从MySQL中获取解析规则 -> 预定类数据
-    val bookRules: List[AnalyzeRule] = AnalyzeRuleFromMySQL.queryRule(1)
+    val bookRules: List[AnalyzeRule] = AnalyzeRuleDB.queryRule(1)
     // 设置广播变量
     @volatile var bookRulesBroadcast: Broadcast[List[AnalyzeRule]] = sc.broadcast(bookRules)
 
     // 从MySQL中获取黑名单IP数据
-    val blackIPRules: ArrayBuffer[String] = AnalyzeRuleFromMySQL.queryBlackIp()
+    val blackIPRules: ArrayBuffer[String] = AnalyzeRuleDB.queryBlackIp()
 
     // 设置广播变量
     @volatile var blackIPRulesBroadcast: Broadcast[ArrayBuffer[String]] = sc.broadcast(blackIPRules)

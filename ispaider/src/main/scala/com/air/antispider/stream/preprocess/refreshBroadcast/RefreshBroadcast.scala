@@ -2,7 +2,7 @@ package com.air.antispider.stream.preprocess.refreshBroadcast
 
 import com.air.antispider.stream.common.bean.AnalyzeRule
 import com.air.antispider.stream.common.util.jedis.JedisConnectionUtil
-import com.air.antispider.stream.preprocess.rule.AnalyzeRuleFromMySQL
+import com.air.antispider.stream.preprocess.rule.AnalyzeRuleDB
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -47,7 +47,7 @@ object RefreshBroadcast {
       broadcast.unpersist()
 
       // b. 从MySQL数据库获取规则
-      val urlFilterRules: ArrayBuffer[String] = AnalyzeRuleFromMySQL.getFilterRuleList()
+      val urlFilterRules: ArrayBuffer[String] = AnalyzeRuleDB.getFilterRuleList()
 
       // c. 更新广播变量
       urlFilterRulesBroadcast = sc.broadcast(urlFilterRules)
@@ -96,7 +96,7 @@ object RefreshBroadcast {
       broadcast.unpersist()
 
       // b. 从MySQL数据库获取规则
-      val urlFilterRules: Map[String, ArrayBuffer[String]] = AnalyzeRuleFromMySQL.getClassifyRule()
+      val urlFilterRules: Map[String, ArrayBuffer[String]] = AnalyzeRuleDB.getClassifyRule()
 
       // c. 更新广播变量
       requestRuleBroadcast = sc.broadcast(urlFilterRules)
@@ -145,7 +145,7 @@ object RefreshBroadcast {
       broadcast.unpersist()
 
       // b. 从MySQL数据库获取规则
-      val queryRules: List[AnalyzeRule] = AnalyzeRuleFromMySQL.queryRule(0)
+      val queryRules: List[AnalyzeRule] = AnalyzeRuleDB.queryRule(0)
 
       // c. 更新广播变量
       queryRulesBroadcast = sc.broadcast(queryRules)
@@ -195,7 +195,7 @@ object RefreshBroadcast {
       broadcast.unpersist()
 
       // b. 从MySQL数据库获取规则
-      val bookRules: List[AnalyzeRule] = AnalyzeRuleFromMySQL.queryRule(1)
+      val bookRules: List[AnalyzeRule] = AnalyzeRuleDB.queryRule(1)
 
       // c. 更新广播变量
       bookRulesBroadcast = sc.broadcast(bookRules)
@@ -244,7 +244,7 @@ object RefreshBroadcast {
       broadcast.unpersist()
 
       // b. 从MySQL数据库获取规则
-      val blackIpRules: ArrayBuffer[String] = AnalyzeRuleFromMySQL.queryBlackIp()
+      val blackIpRules: ArrayBuffer[String] = AnalyzeRuleDB.queryBlackIp()
 
       // c. 更新广播变量
       blackIPRulesBroadcast = sc.broadcast(blackIpRules)
