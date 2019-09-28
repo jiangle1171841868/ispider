@@ -4,7 +4,6 @@ import com.air.antispider.stream.common.util.jedis.{JedisConnectionUtil, Propert
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import redis.clients.jedis.JedisCluster
 
 /**
  * 黑名单保存到HDFS服务

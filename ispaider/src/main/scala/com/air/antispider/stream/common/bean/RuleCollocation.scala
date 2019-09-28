@@ -13,7 +13,6 @@ case class RuleCollocation(ruleId: String, //规则id
                            ruleValue0: Double, //参数
                            ruleValue1: Double, //参数
                            ruleScore: Int //打分
-                          ) {
+                          )
 
 
-}

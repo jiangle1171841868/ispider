@@ -6,8 +6,6 @@ import com.air.antispider.stream.dataprocess.constants.TravelTypeEnum.TravelType
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
-import scala.collection.mutable.ListBuffer
-
 /**
   * 保存请求参数的结构化数据
   * sourceData：请求原始数据
@@ -120,7 +118,6 @@ case class CoreRequestParams(flightDate: String, depcity: String, arrcity: Strin
   * 封装数据
   */
 object ProcessedData {
-
 
   def processData(dataMessage: DataMessage,
                   requestType: RequestType,
