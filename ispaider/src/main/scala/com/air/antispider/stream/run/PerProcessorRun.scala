@@ -47,7 +47,7 @@ object PerProcessorRun {
           val streamingContext = new StreamingContext(sc, Seconds(3))
 
           // d. 设置检查点
-          streamingContext.checkpoint(CHECK_POINT_PATH)
+          //streamingContext.checkpoint(CHECK_POINT_PATH)
 
           // 二. 调用方法处理数据
           processData(streamingContext, sc)
@@ -69,6 +69,8 @@ object PerProcessorRun {
   /// TODO: 抽取函数 传递ssc处理对象处理数据
 
   def processData(ssc: StreamingContext, sc: SparkContext) = {
+
+    //val sc = ssc.sparkContext
 
     //  从MySQL中获取url过滤规则
     val urlFilterRules: ArrayBuffer[String] = AnalyzeRuleDB.getFilterRuleList()
@@ -114,6 +116,7 @@ object PerProcessorRun {
     messageDStrame
       .foreachRDD { (rdd, time) =>
 
+        // TODO 更新广播变量需要rdd创建sparkContext 不然序列化异常
         val sc = rdd.sparkContext
 
         val batchTime: String = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time.milliseconds)
@@ -150,7 +153,7 @@ object PerProcessorRun {
 
           // 三. 业务处理
           // a. 链路统计 -> 发送到redis -> 供前端展示
-          val serverCountMap:Map[String, Int] = LinkProcess.processData(messageRDD)
+          val serverCountMap: Map[String, Int] = LinkProcess.processData(messageRDD)
 
           // b. URL过滤
           val urlFilterRDD: RDD[Message] = messageRDD.filter { message => URLFilter.urlFilter(message, urlFilterRulesBroadcast) }
@@ -214,7 +217,7 @@ object PerProcessorRun {
           DataSendToKafka.sendDataToKafka(processedDataRDD)
 
           // j. 监控数据
-          SparkStreamingMonitor.streamMonitor(processedDataRDD, sc,serverCountMap)
+          SparkStreamingMonitor.streamMonitor(processedDataRDD, sc, serverCountMap)
 
 
           processedDataRDD.foreach(println)

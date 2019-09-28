@@ -257,4 +257,45 @@ object RefreshBroadcast {
     // e. 返回广播变量
     blackIPRulesBroadcast
   }
+
+  def refreshCriticalPagesRulesBroadcast(sc: SparkContext, broadcast: Broadcast[ArrayBuffer[String]], signKey: String): Broadcast[ArrayBuffer[String]] = {
+
+    var criticalPagesRulesBroadcast: Broadcast[ArrayBuffer[String]] = broadcast
+
+    // 1. 从redis中设置一个标记  ->  key -> 来判断MySQL数据库规则是否修改 -> true表示修改
+    // a. 获取redis集群连接
+    val jedis: JedisCluster = JedisConnectionUtil.getJedisCluster
+
+    // b. 获取标记key的值
+    var signValue: String = jedis.get(signKey)
+
+    // c. 第一次获取的话没有值,赋初始值,存入redis
+    if (StringUtils.isBlank(signValue)) {
+
+      //赋初始值为true  -> 表示修改 -> 需要去获取规则
+      signValue = "true"
+      // 将数据设置到redis中
+      jedis.set(signKey, signValue)
+    }
+
+    // 2. 判断状态值是否为true -> 是true说明规则改了 ->  需要更新广播变量
+    if (signValue.toBoolean) {
+
+      // a. 释放广播变量
+      broadcast.unpersist()
+
+      // b. 从MySQL数据库获取规则
+      val criticalPagesRules: ArrayBuffer[String] = AnalyzeRuleDB.queryCriticalPages()
+
+      // c. 更新广播变量
+      criticalPagesRulesBroadcast = sc.broadcast(criticalPagesRules)
+
+      // d. 将状态值设置为false
+      signValue = "false"
+      jedis.set(signKey, signValue)
+
+    }
+    // e. 返回广播变量
+    criticalPagesRulesBroadcast
+  }
 }

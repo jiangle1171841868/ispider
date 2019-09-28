@@ -1,16 +1,23 @@
 package com.air.antispider.stream.run
 
-import com.air.antispider.stream.common.bean.{ProcessedData, QueryDataPackage}
+import com.air.antispider.stream.blackprcess.{CookieCount, CriticalPagesAccessCount, CriticalPagesAccessIntervalCount, CriticalPagesAccessMinInterval, IPAccessCount, IPBlockAccessCount, TravelTypeCount, UserAgentCount}
+import com.air.antispider.stream.common.bean.{ProcessedData, QueryDataPackage, QueryRequestData}
 import com.air.antispider.stream.common.util.jedis.PropertiesUtil
 import com.air.antispider.stream.common.util.kafka.KafkaOffsetUtil
+import com.air.antispider.stream.preprocess.refreshBroadcast.RefreshBroadcast
+import com.air.antispider.stream.preprocess.rule.AnalyzeRuleDB
 import kafka.common.TopicAndPartition
 import kafka.message.MessageAndMetadata
 import kafka.serializer.StringDecoder
 import org.I0Itec.zkclient.ZkClient
+import org.apache.commons.lang3.time.FastDateFormat
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.streaming.{Seconds, StreamingContext}
+import org.apache.spark.streaming.{Minutes, Seconds, StreamingContext}
+
+import scala.collection.mutable.ArrayBuffer
 
 object BlackProcessRun {
 
@@ -27,12 +34,16 @@ object BlackProcessRun {
             .setAppName(this.getClass.getSimpleName.stripSuffix("$"))
             // 设置每秒钟每分区的最大读取量
             .set("spark.streaming.kafka.maxRatePerPartition", "10000")
+          // 设置使用Kryo序列
+          .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+          // 注册哪些类型使用Kryo序列化, 注册RDD中类型
+          //.registerKryoClasses(Array(classOf[QueryRequestData]))
 
           // b. 创建SparkContext对象
           val sc: SparkContext = SparkContext.getOrCreate(sparkConf)
 
           // c. 创建StreamingContext对象
-          val streamingContext = new StreamingContext(sc, Seconds(3))
+          val streamingContext = new StreamingContext(sc, Seconds(5))
 
           // d. 设置检查点
           //streamingContext.checkpoint(CHECK_POINT_PATH)
@@ -62,6 +73,14 @@ object BlackProcessRun {
     */
   def processData(ssc: StreamingContext, sc: SparkContext) = {
 
+    //  从MySQL中获取关键页面
+    val criticalPagesRules: ArrayBuffer[String] = AnalyzeRuleDB.queryCriticalPages()
+    //  设置广播变量
+    var criticalPagesRulesBroadcast: Broadcast[ArrayBuffer[String]] = sc.broadcast(criticalPagesRules)
+
+    //  从MySQL中获取打分规则
+
+
     // 1. 从kafka获取数据
     // a. 设置kafka配置信息
     val kafkaParams: Map[String, String] = Map("bootstrap.servers" -> "node01:9092,node02:9092,node03:9092")
@@ -89,7 +108,7 @@ object BlackProcessRun {
           *     - V: ClassTag,
           *     - KD <: Decoder[K]: ClassTag,
           *     - VD <: Decoder[V]: ClassTag,
-          *     - R: ClassTag]                   //  函数messageHandler返回值的类型 -> Key Value的类型
+          *     - R: ClassTag]     //  函数messageHandler返回值的类型 -> Key Value的类型
           * (
           *     - ssc: StreamingContext,
           *     - kafkaParams: Map[String, String],
@@ -108,23 +127,70 @@ object BlackProcessRun {
     }
 
     // 保存偏移量到zk
-    kafkaDStream.foreachRDD { rdd =>
-      KafkaOffsetUtil.saveOffsets(zkClient, zkHosts, zkPath, rdd)
-    }
+    kafkaDStream.foreachRDD { rdd => KafkaOffsetUtil.saveOffsets(zkClient, zkHosts, zkPath, rdd) }
 
     // 2. 数据切分 -> 封装成ProcessedData
     // a. 获取DStream中的message
     val inputDStream: DStream[String] = kafkaDStream.transform { rdd => rdd.map { case (key, message) => message } }
 
     // b. 封装数据
-    val processedDataRDD: DStream[ProcessedData] = QueryDataPackage.queryDataLoadAndPackage(inputDStream)
+    val sourceDStream: DStream[ProcessedData] = QueryDataPackage.queryDataLoadAndPackage(inputDStream)
+
+    // 设置时间窗口 -> 5秒钟计算前5分钟的数据 -> 必须是批次的整数倍
+    sourceDStream.window(Minutes(5), Seconds(5))
 
     // 3. 数据处理
+    sourceDStream.foreachRDD { (rdd, time) =>
 
+      val sc = rdd.sparkContext
 
+      val batchTime: String = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time.milliseconds)
 
-      kafkaDStream.print()
+      println("-------------------------------------------")
+      println(s"Time: $batchTime")
+      println("-------------------------------------------")
+
+      // 判断RDD是否为空 => 没有数据就不处理
+      if (!rdd.isEmpty()) {
+
+        // 每一批次数据执行操作的时候,对广播变量进行更新
+        criticalPagesRulesBroadcast = RefreshBroadcast.refreshCriticalPagesRulesBroadcast(sc, criticalPagesRulesBroadcast, "criticalPagesRules")
+
+        // a. 单位时间内的 IP 段访问量（前两位）
+        val ipBlockAccessCountMap: collection.Map[String, Long] = IPBlockAccessCount.processData(rdd).collectAsMap()
+        ipBlockAccessCountMap.foreach(println)
+
+        // b. 单位时间内的 IP 的访问量
+        val ipAccessCountMap: collection.Map[String, Long] = IPAccessCount.processData(rdd).collectAsMap()
+        ipAccessCountMap.foreach(println)
+
+        // c. 单位时间内的关键页面访问总量
+        val criticalPagesAccessCountMap: collection.Map[String, Long] = CriticalPagesAccessCount.processData(rdd, criticalPagesRulesBroadcast).collectAsMap()
+        criticalPagesAccessCountMap.foreach(println)
+
+        // d. 单位时间内的 UA 出现次数统计
+        val userAgentCountMap: collection.Map[String, Long] = UserAgentCount.processData(rdd).collectAsMap()
+        userAgentCountMap.foreach(println)
+
+        // e. 单位时间内的关键页面最短访问间隔
+        val criticalPagesAccessMinIntervalMap: collection.Map[String, Long] = CriticalPagesAccessMinInterval.processData(rdd, criticalPagesRulesBroadcast).collectAsMap()
+        criticalPagesAccessMinIntervalMap.foreach(println)
+
+        // f. 单位时间内小于最短访问间隔（预设）的关键页面查询次数
+        val criticalPagesAccessIntervalCountMap: collection.Map[String, Long] = CriticalPagesAccessIntervalCount.processData(rdd, criticalPagesRulesBroadcast).collectAsMap()
+        criticalPagesAccessIntervalCountMap.foreach(println)
+
+        // g. 单位时间内关键页面的访问次数的 Cookie 数少于 X
+        val cookieCountMap: collection.Map[String, Long] = CookieCount.processData(rdd).collectAsMap()
+        cookieCountMap.foreach(println)
+
+        // h. 单位时间内查询不同行程的次数
+        val travelTypeCountMap: collection.Map[String, Long] = TravelTypeCount.processData(rdd).collectAsMap()
+        travelTypeCountMap.foreach(println)
+
+      }
+
+    }
+
   }
-
-
 }

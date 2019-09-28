@@ -19,8 +19,8 @@ object AnalyzeRequest {
   val logger = Logger.getLogger("AnalyzeRequest")
   /**
     * 不同类型数据，根据不同解析规则进行解析
-    * 1.通过数据的请求方式((requestMethod) ) 请求类型 操作类型(BehaviorType)来过滤解析规则 -> 如果有多条取最后一条
-    * 2.根据请求方式 参数类型类型来确定数据的解析规则
+    *     - 1.通过数据的请求方式((requestMethod) ) 请求类型 操作类型(BehaviorType)来过滤解析规则 -> 如果有多条取最后一条
+    *     - 2.根据请求方式 参数类型类型来确定数据的解析规则
     */
   def analyzeQueryRequest(requestTypeLabel: RequestType,
                           requestMethod: String,
