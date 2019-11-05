@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
   * Created by wangsenfeng on 2019/1/4.
   */
 object QueryDB {
-  def queryData(sql: String, field: String): ArrayBuffer[String] = {
+  def queryData(sql: String, field: String*): ArrayBuffer[String] = {
     //创建ab，用来封装数据
     val arr = new ArrayBuffer[String]()
     //获取连接
@@ -15,10 +15,7 @@ object QueryDB {
     //执行sql语句
     val ps = conn.prepareStatement(sql)
     val rs = ps.executeQuery()
-    //封装数据
-    while (rs.next()){
-      arr.+=(rs.getString(field))
-    }
+
     c3p0Util.close(conn,ps,rs)
     //返回结果
     arr
